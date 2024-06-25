@@ -1,0 +1,137 @@
+version: '3.7'
+
+x-kafka-defaults: &kafka-defaults
+  image: confluentinc/cp-kafka:6.2.7
+  depends_on:
+    - zookeeper
+
+x-kafka-environment-defaults: &kafka-environment-defaults
+  KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+  KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
+  KAFKA_TOOLS_LOG4J_LOGLEVEL: ERROR
+  KAFKA_LOG4J_LOGGERS: "org.apache.zookeeper=ERROR,org.apache.kafka=ERROR,kafka=ERROR,kafka.cluster=ERROR,kafka.controller=ERROR,kafka.coordinator=ERROR,kafka.log=ERROR,kafka.server=ERROR,kafka.zookeeper=ERROR,state.change.logger=ERROR,kafka.controller=WARN,kafka.foo.bar=DEBUG"
+  KAFKA_NUM_PARTITIONS: 1
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+  
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:6.2.7
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: [ "CMD", "jps -l | grep zookeeper" ]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+
+  kafka:
+    <<: *kafka-defaults
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    healthcheck:
+      test: [ "CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list" ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+    ports:
+      - "19092:19092"
+    environment:
+      <<: *kafka-environment-defaults
+      KAFKA_BROKER_ID: 1
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:19092
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:6.2.7
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:9092'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_DEBUG: 'true'
+      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: backward_transitive
+
+  kafka-ui:
+    hostname: kafka-ui
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - 8080:8080
+    depends_on:
+      - kafka
+      - schema-registry
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9997
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+
+#  localstack:
+#    image: localstack/localstack:latest
+#    ports:
+#      - "127.0.0.1:4566:4566"            # LocalStack Gateway
+#      - "127.0.0.1:4510-4559:4510-4559"  # external services port range
+#      # - '4566-4597:4566-4597'
+#    # environment:
+#      # - DEFAULT_REGION=eu-west-1
+#      # - SERVICES=sqs,sns,s3
+#      # - DATA_DIR=/tmp/localstack/data
+#    volumes:
+#      - "/tmp/localstack/data:/var/lib/localstack"
+#      - "/var/run/docker.sock:/var/run/docker.sock"
+#
+#  aws_cli:
+#    image: amazon/aws-cli
+#    depends_on: 
+#      - localstack
+#    entrypoint: /bin/sh -c
+#    command: >  
+#     '
+#     COUNTER=15;
+#     SQS_DESIRED_STATE="sqs available";
+#     SERVICE_ACTUAL_STATE=0;
+#     
+#      while [ $$COUNTER -ne 0 ] && [ $$SERVICE_ACTUAL_STATE != 1 ]
+#      
+#      do 
+#      RESPONSE=$$(curl -sb --connect-timeout 2 /dev/null "localstack:4566/health?redirect" | tr -cd [^[:alnum:][:space:]]+) 
+#      echo " Response from Localstack $$RESPONSE";
+#
+#      if [[ $$RESPONSE == *"$$SQS_DESIRED_STATE"* ]]; then SERVICE_ACTUAL_STATE=1; else SERVICE_ACTUAL_STATE=0; fi;
+#      
+#      COUNTER=$$((COUNTER-1)); 
+#      echo "Service is not ready yet! $$COUNTER retries left."; 
+#      sleep 5; 
+#      done; 
+#      echo backend is up;
+#
+#      echo "########### Creating profile ###########"
+#
+#      aws configure set aws_access_key_id test --profile=default
+#      aws configure set aws_secret_access_key test --profile=default
+#      aws configure set region eu-west-1 --profile=default
+#
+#      echo "########### Listing profile ###########"
+#      aws configure list --profile=default
+
+
+#volumes:
+#    mssql:
+#    localstack:

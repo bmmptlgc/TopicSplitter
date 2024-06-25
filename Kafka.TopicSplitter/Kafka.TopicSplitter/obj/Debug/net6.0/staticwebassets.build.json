@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "gSXIlOl9jXPgVEencT8igmTrqsbJyric1yozn3OVN+8=",
+  "Source": "Kafka.TopicSplitter",
+  "BasePath": "_content/Kafka.TopicSplitter",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}
